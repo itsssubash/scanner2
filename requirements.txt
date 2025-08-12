@@ -18,3 +18,4 @@ Flask-Talisman
 python-dotenv
 gunicorn
 waitress
+psycopg2-binary
