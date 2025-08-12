@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+{% block title %}Set Up 2FA - Aegis{% endblock %}
+
+{% block content %}
+<script>document.body.classList.add('auth-body-override');</script>
+<div class="auth-container two-fa-box">
+    <h2><i class="fas fa-mobile-alt"></i> Set Up 2FA</h2>
+    
+    <h3 style="margin-top: 2rem;">1. Scan QR Code</h3>
+    <p>Scan this QR code with your authenticator app.</p>
+    <img src="data:image/png;base64,{{ qr_code }}" alt="2FA QR Code" class="qr-code-img">
+    
+    <h3 style="margin-top: 2rem;">2. Verify Code</h3>
+    <p>Enter the 6-digit code from your app to enable 2FA.</p>
+    <form method="post" action="{{ url_for('enable_2fa') }}" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_value }}">
+        <input type="text" name="otp_code" placeholder="6-digit code" required autocomplete="off" minlength="6" maxlength="6">
+        <button type="submit"><i class="fas fa-check-circle"></i> Verify & Enable</button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block title %}Verify 2FA - Aegis{% endblock %}
+
+{% block content %}
+<script>document.body.classList.add('auth-body-override');</script>
+<div class="auth-container two-fa-box">
+    <h2><i class="fas fa-key"></i> Enter Verification Code</h2>
+    <p>Please enter the code from your authenticator app to complete your login.</p>
+    <form method="post" action="{{ url_for('verify_2fa_login') }}" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_value }}">
+        <input type="text" name="otp_code" placeholder="6-digit code" required autocomplete="off" minlength="6" maxlength="6">
+        <button type="submit"><i class="fas fa-sign-in-alt"></i> Verify</button>
+    </form>
+</div>
+{% endblock %}

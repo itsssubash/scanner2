@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; color: #333; }
+        .container { padding: 20px; border: 1px solid #ddd; border-radius: 5px; max-width: 600px; margin: auto; }
+        .header { background-color: #e74c3c; color: white; padding: 10px; text-align: center; border-radius: 5px 5px 0 0; }
+        .finding { border-bottom: 1px solid #eee; padding: 10px 0; }
+        strong { color: #555; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>New Critical Security Alert</h2>
+        </div>
+        <p>Hello,</p>
+        <p>A recent automated scan found the following new critical issues in your AWS environment:</p>
+
+        {% for finding in new_findings %}
+        <div class="finding">
+            <strong>Service:</strong> {{ finding.service }}<br>
+            <strong>Resource:</strong> {{ finding.resource }}<br>
+            <strong>Issue:</strong> {{ finding.issue }}
+        </div>
+        {% endfor %}
+
+        <p>Please log in to the dashboard to review all findings.</p>
+        <p>Thank you,<br>Cloud Security Scanner</p>
+    </div>
+</body>
+</html>

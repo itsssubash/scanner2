@@ -1,0 +1,62 @@
+{% extends "layout.html" %}
+{% block title %}Login / Register - Aegis{% endblock %}
+
+{% block content %}
+<script>document.body.classList.add('auth-body-override');</script>
+
+<div class="auth-wrapper">
+    <div class="auth-container">
+        <div class="auth-toggle">
+            <a href="#login" id="showLogin" class="active">Login</a>
+            <a href="#register" id="showRegister">Register</a>
+        </div>
+
+        <form id="loginForm" class="auth-form" method="post" action="{{ url_for('login_post') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token_value }}">
+            <h2>Welcome Back</h2>
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <div class="form-extra">
+                <a href="{{ url_for('request_password_reset') }}">Forgot Password?</a>
+            </div>
+            <button type="submit">Log In</button>
+        </form>
+
+        <form id="registerForm" class="auth-form" method="post" action="{{ url_for('register_post') }}" style="display: none;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token_value }}">
+            <h2>Create Account</h2>
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="email" name="email" placeholder="Email Address" required>
+            <input type="password" name="password" placeholder="Password" required title="Must be 8+ chars, with uppercase, lowercase, number, and special character.">
+            <input type="password" name="confirm_password" placeholder="Confirm Password" required>
+            <input type="password" name="admin_key" placeholder="Admin Registration Key (Optional)">
+            <div class="eula-container">
+                <input type="checkbox" name="eula" id="eula" required>
+                <label for="eula">I agree to the <a href="{{ url_for('eula') }}" target="_blank">Terms of Service</a></label>
+            </div>
+            <button type="submit">Register</button>
+        </form>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/tsparticles-slim@2.12.0/tsparticles.slim.bundle.min.js"></script>
+<script>
+    tsParticles.load("page-background", {
+        particles: {
+            number: { value: 60, density: { enable: true, value_area: 800 } },
+            color: { value: "#ffffff" },
+            shape: { type: "circle" },
+            opacity: { value: 0.3, random: true },
+            size: { value: 2, random: true },
+            line_linked: { enable: true, distance: 150, color: "#ffffff", opacity: 0.2, width: 1 },
+            move: { enable: true, speed: 1, direction: "none", random: false, straight: false, out_mode: "out" },
+        },
+        interactivity: {
+            detect_on: "canvas",
+            events: { onhover: { enable: true, mode: "grab" }, resize: true },
+            modes: { grab: { distance: 140, line_opacity: 0.5 } },
+        },
+        retina_detect: true,
+    });
+</script>
+{% endblock %}

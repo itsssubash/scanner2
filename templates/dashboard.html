@@ -1,0 +1,153 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard - Aegis{% endblock %}
+
+{% block content %}
+<script>document.body.classList.add('dashboard-body');</script>
+
+<div class="dashboard-grid">
+    <div class="metrics-summary" data-aos="fade-up">
+        <div class="metric card">
+            <div class="metric-icon total"><i class="fas fa-server"></i></div>
+            <div class="metric-details">
+                <span class="metric-value" id="totalResources">0</span>
+                <span class="metric-label">Resources Scanned</span>
+            </div>
+        </div>
+        <div class="metric card">
+            <div class="metric-icon critical"><i class="fas fa-exclamation-triangle"></i></div>
+            <div class="metric-details">
+                <span class="metric-value" id="criticalFindings">0</span>
+                <span class="metric-label">Critical Findings</span>
+            </div>
+        </div>
+        <div class="metric card">
+            <div class="metric-icon health"><i class="fas fa-heartbeat"></i></div>
+            <div class="metric-details">
+                <span class="metric-value" id="healthScore">0%</span>
+                <span class="metric-label">Scan Health Score</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" data-aos="fade-up" data-aos-delay="100">
+        <h2><i class="fas fa-clipboard-list"></i> Remediation Priority</h2>
+        <div id="remediationList">
+            <p class="empty-state">Run a scan to see your top priority issues.</p>
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <div class="card chart-container" data-aos="fade-up" data-aos-delay="200">
+        <canvas id="postureChart"></canvas>
+    </div>
+    <div class="card chart-container" data-aos="fade-up" data-aos-delay="300">
+        <canvas id="serviceBreakdownChart"></canvas>
+    </div>
+    <div class="card chart-container" data-aos="fade-up" data-aos-delay="400">
+        <canvas id="historicalTrendCanvas"></canvas>
+    </div>
+</div>
+
+<div id="statusMessage"></div>
+
+<div id="scan-console-wrapper" class="card" style="display: none; margin-top: 2rem; margin-bottom: 2rem;" data-aos="fade-up">
+    <h4><i class="fas fa-terminal"></i> Scan in Progress...</h4>
+    <div id="scan-console"></div>
+</div>
+
+<div class="dashboard-grid">
+    <div class="card" data-aos="fade-up">
+        <h2><i class="fas fa-tasks"></i> Current Scan Results</h2>
+        <div class="filter-controls">
+            <input type="text" id="currentSearch" class="form-control-filter" placeholder="Filter current results...">
+            <select id="currentStatusFilter" class="form-control-filter">
+                <option value="all">All Statuses</option>
+                <option value="critical">Critical</option>
+                <option value="warning">Warning</option>
+                <option value="ok">OK</option>
+            </select>
+        </div>
+        <div id="resultsList">
+            <p class="empty-state">Click "Run Scan" to see the latest results.</p>
+        </div>
+    </div>
+    <div class="card" data-aos="fade-up" data-aos-delay="100">
+        <div class="history-header">
+            <h2><i class="fas fa-history"></i> Historical Scans</h2>
+        </div>
+         <div class="filter-controls">
+            <input type="text" id="historySearch" class="form-control-filter" placeholder="Filter history...">
+            <select id="historyStatusFilter" class="form-control-filter">
+                <option value="all">All Statuses</option>
+                <option value="critical">Critical</option>
+                <option value="warning">Warning</option>
+                <option value="ok">OK</option>
+            </select>
+        </div>
+        <div class="history-actions">
+            <div class="pagination-controls">
+                <button id="historyPrevBtn" class="button-secondary button-small" disabled>&laquo; Previous</button>
+                <span id="historyPageIndicator">Page 1 of 1</span>
+                <button id="historyNextBtn" class="button-secondary button-small" disabled>Next &raquo;</button>
+            </div>
+            <button id="deleteHistoryButton" class="button-danger button-small"><i class="fas fa-trash-alt"></i> Delete History</button>
+        </div>
+        <div id="historyList">
+            <p class="empty-state">Loading historical data...</p>
+        </div>
+    </div>
+</div>
+
+<style>
+    .history-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0.75rem; background-color: var(--light-grey); border-radius: var(--border-radius); }
+    body.dark-mode .history-actions { background-color: #2C3E50; }
+    .pagination-controls { display: flex; align-items: center; gap: 0.75rem; }
+    .history-header { display: flex; justify-content: space-between; align-items: center; }
+    .remediation-item { padding: 0.75rem 0; border-bottom: 1px solid var(--border-color); }
+    .remediation-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .remediation-item strong { color: var(--danger-color); }
+    .remediation-item .resource-name { font-family: monospace; background-color: var(--light-grey); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+    .empty-state { color: var(--medium-grey); }
+    body.dark-mode .remediation-item .resource-name { background-color: #4A5568; }
+    .remediation-block { margin-top: 0.75rem; padding: 0.75rem; background-color: var(--light-grey); border-radius: var(--border-radius); border: 1px solid var(--border-color); font-size: 0.9em; }
+    .remediation-block strong { color: var(--primary-color); display: block; margin-bottom: 0.5rem; }
+    .remediation-block p { margin: 0; line-height: 1.5; }
+    body.dark-mode .remediation-block { background-color: #1A202C; }
+    .history-header h2 { margin: 0; }
+    .form-control-filter { padding: 0.5rem 0.8rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); max-width: 250px; }
+    body.dark-mode .form-control-filter { background-color: #4A5568; border-color: #566573; color: var(--dark-grey); }
+    .filter-controls { display: flex; gap: 1rem; margin: 1rem 0; flex-wrap: wrap; }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/tsparticles-slim@2.12.0/tsparticles.slim.bundle.min.js"></script>
+<script>
+    const isDarkMode = document.body.classList.contains('dark-mode');
+    const lineColor = isDarkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(52, 73, 94, 0.2)';
+
+    tsParticles.load("page-background", {
+        particles: {
+            number: { value: 80, density: { enable: true, value_area: 800 } },
+            color: { value: lineColor },
+            shape: { type: "circle" },
+            opacity: { value: 0.5, random: true },
+            size: { value: 1, random: true },
+            links: {
+                enable: true,
+                distance: 150,
+                color: lineColor,
+                opacity: 1,
+                width: 1
+            },
+            move: { enable: true, speed: 1, direction: "none", random: true, straight: false, out_mode: "out" },
+        },
+        interactivity: {
+            detect_on: "canvas",
+            events: { onhover: { enable: true, mode: "grab" }, resize: true },
+            modes: { grab: { distance: 140, line_opacity: 1 } },
+        },
+        retina_detect: true,
+    });
+</script>
+
+{% endblock %}

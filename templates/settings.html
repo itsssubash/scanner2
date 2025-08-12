@@ -1,0 +1,266 @@
+{% extends "layout.html" %}
+{% block title %}User Settings - Aegis{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 800px; margin: auto;" data-aos="fade-up">
+    <h2><i class="fas fa-user-cog"></i> User Settings</h2>
+    <p>Manage your account preferences, security settings, and session controls.</p>
+
+    <div class="settings-section">
+        <form method="POST" action="{{ url_for('settings') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token_value }}">
+            <input type="hidden" name="form_name" value="timeout">
+            <h3><i class="fas fa-clock"></i> Session Timeout</h3>
+            <p>Automatically log out after a period of inactivity. (Value in minutes, between 5 and 120).</p>
+            <div class="form-group">
+                <label for="inactivity_timeout">Inactivity Timeout:</label>
+                <input type="number" name="inactivity_timeout" id="inactivity_timeout" value="{{ current_user.inactivity_timeout }}" min="5" max="120" class="form-control" required>
+                <button type="submit" class="button"><i class="fas fa-save"></i> Save Timeout</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="settings-section">
+        <h3><i class="fas fa-key"></i> Password & Security</h3>
+        <form method="POST" action="{{ url_for('settings') }}" class="sub-section">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token_value }}">
+            <input type="hidden" name="form_name" value="change_password">
+            <h4>Change Password</h4>
+            <div class="form-group-vertical">
+                <label for="current_password">Current Password</label>
+                <input type="password" name="current_password" class="form-control" required>
+                <label for="new_password">New Password</label>
+                <input type="password" name="new_password" class="form-control" required title="Must be 8+ chars, with uppercase, lowercase, number, and special character.">
+                <button type="submit" class="button"><i class="fas fa-exchange-alt"></i> Update Password</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="settings-section">
+        <h3><i class="fas fa-mobile-alt"></i> Two-Factor Authentication (2FA)</h3>
+        <div class="sub-section">
+            {% if current_user.is_2fa_enabled %}
+                <p>2FA is currently <strong>enabled</strong> on your account.</p>
+                <form method="POST" action="{{ url_for('settings') }}">
+                     <input type="hidden" name="csrf_token" value="{{ csrf_token_value }}">
+                     <input type="hidden" name="form_name" value="disable_2fa">
+                     <p>Disabling 2FA will reduce your account's security. Please enter your password to confirm.</p>
+                     <div class="form-group">
+                        <input type="password" name="password_2fa" placeholder="Enter Your Password" class="form-control" required>
+                        <button type="submit" class="button-danger" onclick="return confirm('Are you sure you want to disable 2FA?');"><i class="fas fa-times-circle"></i> Disable 2FA</button>
+                     </div>
+                </form>
+            {% else %}
+                <p>2FA is currently <strong>disabled</strong>. Add an extra layer of security to your account.</p>
+                <a href="{{ url_for('setup_2fa') }}" class="button"><i class="fas fa-check-circle"></i> Enable 2FA Now</a>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="settings-section">
+        <h3><i class="fas fa-envelope"></i> Email Management</h3>
+        <form method="POST" action="{{ url_for('settings') }}" class="sub-section">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token_value }}">
+            <input type="hidden" name="form_name" value="change_primary_email">
+            <h4>Primary Email Address</h4>
+            <p>Your current primary email is <strong>{{ current_user.email }}</strong>. To change it, enter a new email and your current password.</p>
+            <div class="form-group-vertical">
+                <label for="new_email">New Email Address</label>
+                <input type="email" name="new_email" class="form-control" required>
+                <label for="password">Current Password</label>
+                <input type="password" name="password" class="form-control" required>
+                <button type="submit" class="button"><i class="fas fa-paper-plane"></i> Send Verification</button>
+            </div>
+        </form>
+        <form method="POST" action="{{ url_for('settings') }}" class="sub-section" style="margin-top: 2rem;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token_value }}">
+            <input type="hidden" name="form_name" value="add_backup_email">
+            <h4>Backup Email for Recovery</h4>
+            {% if current_user.backup_email_verified %}<p>Your verified backup email is <strong>{{ current_user.backup_email }}</strong>.</p>{% else %}<p>Add a backup email for account recovery.</p>{% endif %}
+            <div class="form-group-vertical">
+                <label for="backup_email">New Backup Email</label>
+                <input type="email" name="backup_email" class="form-control" required>
+                <label for="password">Current Password</label>
+                <input type="password" name="password" class="form-control" required>
+                <button type="submit" class="button"><i class="fas fa-plus-circle"></i> Add/Update Backup Email</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="settings-section">
+        <h3><i class="fas fa-key"></i> AWS Credential Management</h3>
+        <p>Add secure credential profiles for the scanner to use. Secret keys are encrypted and are never displayed again.</p>
+        <form method="POST" action="{{ url_for('settings') }}" class="sub-section">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token_value }}">
+            <input type="hidden" name="form_name" value="add_aws_credential">
+            <h4>Add New Profile</h4>
+            <div class="form-group-vertical">
+                <label for="profile_name">Profile Name (e.g., "Personal Account")</label>
+                <input type="text" name="profile_name" class="form-control" required>
+                <label for="access_key_id">AWS Access Key ID</label>
+                <input type="text" name="access_key_id" class="form-control" required>
+                <label for="secret_access_key">AWS Secret Access Key</label>
+                <input type="password" name="secret_access_key" class="form-control" required>
+                <button type="submit" class="button"><i class="fas fa-plus-circle"></i> Add Profile</button>
+            </div>
+        </form>
+        <div class="sub-section" style="margin-top: 2rem;">
+            <h4>Saved Profiles</h4>
+            {% if credentials %}
+            <div class="table-container">
+                <table>
+                    <thead><tr><th>Profile Name</th><th>Access Key ID</th><th>Action</th></tr></thead>
+                    <tbody>
+                        {% for cred in credentials %}
+                        <tr>
+                            <td>{{ cred.profile_name }}</td>
+                            <td>{{ cred.access_key_id }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('delete_credential', credential_id=cred.id) }}" onsubmit="return confirm('Are you sure you want to delete this profile?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token_value }}">
+                                    <button type="submit" class="button-danger button-small"><i class="fas fa-trash-alt"></i> Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p>You have no saved credential profiles.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="settings-section">
+        <h3><i class="fas fa-bell"></i> Notification Preferences</h3>
+        
+        <form method="POST" action="{{ url_for('settings') }}" class="sub-section">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token_value }}">
+            <input type="hidden" name="form_name" value="notifications">
+            <h4>Real-time Alerts</h4>
+            <div class="form-group-checkbox">
+                <input type="checkbox" name="notifications_enabled" id="notifications_enabled" {% if current_user.notifications_enabled %}checked{% endif %}>
+                <label for="notifications_enabled">Receive email alerts for new critical findings from scheduled scans.</label>
+            </div>
+            <button type="submit" class="button"><i class="fas fa-save"></i> Save Alert Preference</button>
+        </form>
+
+        <form method="POST" action="{{ url_for('settings') }}" class="sub-section" style="margin-top: 2rem;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token_value }}">
+            <input type="hidden" name="form_name" value="report_schedule">
+            <h4>Scheduled PDF Reports</h4>
+            <p>Automatically receive a full PDF report via email on a schedule.</p>
+            
+            <div class="form-group-vertical">
+                <label for="report_schedule">Report Frequency</label>
+                <select name="report_schedule" id="report_schedule" class="form-control">
+                    <option value="disabled" {% if current_user.report_schedule == 'disabled' %}selected{% endif %}>Disabled</option>
+                    <option value="weekly" {% if current_user.report_schedule == 'weekly' %}selected{% endif %}>Weekly</option>
+                    <option value="monthly" {% if current_user.report_schedule == 'monthly' %}selected{% endif %}>Monthly</option>
+                </select>
+
+                <div id="weekly_day_selector" style="display: none;">
+                    <label for="report_day_weekly">Day of the Week</label>
+                    <select name="report_day_weekly" class="form-control">
+                        {% set days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] %}
+                        {% for day in days %}
+                            <option value="{{ day }}" {% if current_user.report_day == day %}selected{% endif %}>{{ day.title() }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div id="monthly_day_selector" style="display: none;">
+                    <label for="report_day_monthly">Day of the Month</label>
+                    <select name="report_day_monthly" class="form-control">
+                        {% for i in range(1, 29) %}
+                            <option value="{{ i }}" {% if current_user.report_day == i|string %}selected{% endif %}>{{ i }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <label for="report_credential_id">AWS Profile for Report</label>
+                <select name="report_credential_id" class="form-control" required>
+                    <option value="">-- Select a Profile --</option>
+                    {% for cred in credentials %}
+                        <option value="{{ cred.id }}" {% if current_user.report_credential_id == cred.id %}selected{% endif %}>{{ cred.profile_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="button" style="margin-top: 1rem;"><i class="fas fa-save"></i> Save Schedule</button>
+        </form>
+    </div>
+
+    <div class="settings-section" id="suppression-management">
+        <h3><i class="fas fa-eye-slash"></i> Suppression Management</h3>
+        <p>View and manage findings that you have previously suppressed.</p>
+        <div class="sub-section">
+            <div class="table-container">
+                <table id="suppressedFindingsTable">
+                    <thead>
+                        <tr>
+                            <th>Service</th>
+                            <th>Resource</th>
+                            <th>Issue</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for finding in suppressed_findings %}
+                        <tr>
+                            <td>{{ finding.service }}</td>
+                            <td>{{ finding.resource }}</td>
+                            <td>{{ finding.issue }}</td>
+                            <td>
+                                <button class="button-secondary button-small unsuppress-btn" data-suppression-id="{{ finding.id }}">
+                                    <i class="fas fa-eye"></i> Un-suppress
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% if not suppressed_findings %}
+                        <tr>
+                            <td colspan="4" style="text-align: center;">You have no suppressed findings.</td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .settings-section { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); }
+    .settings-section h3 { color: var(--dark-grey); }
+    body.dark-mode .settings-section h3 { color: var(--dark-grey); }
+    .settings-section h4 { margin-top: 0; margin-bottom: 1rem; color: var(--primary-color); }
+    .sub-section { padding-left: 1rem; border-left: 3px solid var(--light-grey); }
+    body.dark-mode .sub-section { border-left-color: #4A5568; }
+    .form-group { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .form-group-vertical { display: flex; flex-direction: column; gap: 0.5rem; max-width: 400px; }
+    .form-group-vertical button { margin-top: 0.5rem; }
+    .form-control { width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background-color: var(--card-bg); color: var(--dark-grey); box-sizing: border-box; }
+    body.dark-mode .form-control { background-color: #4A5568; border-color: #566573; color: var(--dark-grey); }
+    .table-container { overflow-x: auto; }
+    .form-group-checkbox { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+    .form-group-checkbox input[type="checkbox"] { width: auto; margin: 0; }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const scheduleSelect = document.getElementById('report_schedule');
+        const weeklySelector = document.getElementById('weekly_day_selector');
+        const monthlySelector = document.getElementById('monthly_day_selector');
+
+        function toggleSelectors() {
+            const selected = scheduleSelect.value;
+            weeklySelector.style.display = selected === 'weekly' ? 'block' : 'none';
+            monthlySelector.style.display = selected === 'monthly' ? 'block' : 'none';
+        }
+
+        scheduleSelect.addEventListener('change', toggleSelectors);
+        toggleSelectors();
+    });
+</script>
+{% endblock %}

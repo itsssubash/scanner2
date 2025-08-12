@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Aegis Cloud Scanner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="welcome-body">
+    <div class="welcome-box">
+        <div class="animated-logo-container">
+            <svg class="animated-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <path class="logo-shield-bg" d="M 50,2 L 95,25 L 95,60 C 95,85 50,98 50,98 C 50,98 5,85 5,60 L 5,25 Z"/>
+                <path class="logo-shield-fg" d="M 50,2 L 95,25 L 95,60 C 95,85 50,98 50,98 C 50,98 5,85 5,60 L 5,25 Z"/>
+                <polyline class="logo-check" points="30,55 45,70 70,40"/>
+            </svg>
+        </div>
+        
+        <div class="typing-container">
+            <h1 id="app-name-typed"></h1>
+            <p><span id="features-typed"></span></p>
+        </div>
+
+        <div class="welcome-actions">
+            <a href="{{ url_for('auth', _anchor='login') }}" class="button">Login</a>
+            <a href="{{ url_for('auth', _anchor='register') }}" class="button-secondary">Register</a>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/typewriter-effect@latest/dist/core.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tsparticles-slim@2.12.0/tsparticles.slim.bundle.min.js"></script>
+    <script>
+        // Typing animation
+        var appNameElement = document.getElementById('app-name-typed');
+        var featuresElement = document.getElementById('features-typed');
+        var typewriter = new Typewriter(appNameElement, { loop: false, delay: 75 });
+        typewriter.pauseFor(500).typeString('Aegis Cloud Scanner').start();
+        var typewriter2 = new Typewriter(featuresElement, { strings: ['Scan S3, EC2, RDS & more.', 'Identify critical misconfigurations.', 'Secure your cloud environment.'], autoStart: true, loop: true, delay: 50 });
+
+        // MODIFIED: Particle animation now targets the #page-background div
+        tsParticles.load("page-background", {
+            particles: {
+                number: { value: 60, density: { enable: true, value_area: 800 } },
+                color: { value: "#ffffff" },
+                shape: { type: "circle" },
+                opacity: { value: 0.3, random: true },
+                size: { value: 2, random: true },
+                line_linked: { enable: true, distance: 150, color: "#ffffff", opacity: 0.2, width: 1 },
+                move: { enable: true, speed: 1, direction: "none", random: false, straight: false, out_mode: "out" },
+            },
+            interactivity: {
+                detect_on: "canvas",
+                events: { onhover: { enable: true, mode: "grab" }, resize: true },
+                modes: { grab: { distance: 140, line_opacity: 0.5 } },
+            },
+            retina_detect: true,
+        });
+    </script>
+</body>
+</html>

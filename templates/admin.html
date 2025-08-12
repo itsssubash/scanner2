@@ -1,0 +1,126 @@
+{% extends "layout.html" %}
+{% block title %}Admin Dashboard - Aegis{% endblock %}
+
+{% block content %}
+<div class="card" id="adminDashboardPage" data-aos="fade-up">
+    <h2><i class="fas fa-user-shield"></i> Admin Dashboard</h2>
+    <p>View all users and system-wide scan activity.</p>
+</div>
+
+<div class="card" data-aos="fade-up" data-aos-delay="100" style="margin-top: 2rem;">
+    <div class="table-header">
+        <h3><i class="fas fa-users"></i> Registered Users ({{ users|length }})</h3>
+        <input type="text" id="userSearch" class="form-control-filter" placeholder="Filter users...">
+    </div>
+    <div class="table-container">
+        <table id="userTable">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Admin?</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>{{ user.email }}</td>
+                    <td>
+                        {% if user.is_locked %}<span class="status-CRITICAL">Locked</span>
+                        {% elif not user.email_verified %}<span class="status-ERROR">Unverified</span>
+                        {% else %}<span class="status-OK">Active</span>
+                        {% endif %}
+                    </td>
+                    <td>{% if user.is_admin %}<span class="status-OK">Yes</span>{% else %}No{% endif %}</td>
+                    <td>
+                        {% if user.is_locked %}
+                        <form method="POST" action="{{ url_for('unlock_user', user_id=user.id) }}" style="display: inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token_value }}">
+                            <button type="submit" class="button button-small" style="background-color: var(--warning-color);"><i class="fas fa-unlock"></i> Unlock</button>
+                        </form>
+                        {% endif %}
+                        <form method="POST" action="{{ url_for('delete_user', user_id=user.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to permanently delete this user and all their scan data?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token_value }}">
+                            <button type="submit" class="button-danger button-small" {% if user.id == current_user.id %}disabled title="You cannot delete yourself."{% endif %}><i class="fas fa-trash-alt"></i> Delete</button>
+                        </form>
+                        {% if not user.is_admin %}
+                        <form method="POST" action="{{ url_for('promote_user', user_id=user.id) }}" style="display: inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token_value }}">
+                            <button type="submit" class="button button-small" style="background-color: var(--success-color);"><i class="fas fa-user-plus"></i> Promote</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card" data-aos="fade-up" data-aos-delay="200" style="margin-top: 2rem;">
+    <div class="table-header">
+        <h3><i class="fas fa-history"></i> Global Scan History</h3>
+        <input type="text" id="scanSearch" class="form-control-filter" placeholder="Filter scans...">
+    </div>
+    <div class="table-container">
+        <table id="scanTable">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Service</th>
+                    <th>Resource</th>
+                    <th>Status</th>
+                    <th>Timestamp</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for scan in scans %}
+                <tr>
+                    <td>{{ scan.author.username if scan.author else 'System' }}</td>
+                    <td>{{ scan.service }}</td>
+                    <td>{{ scan.resource }}</td>
+                    <td><span class="status-{{ scan.status }}">{{ scan.status }}</span></td>
+                    <td>{{ scan.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card" data-aos="fade-up" data-aos-delay="300" style="margin-top: 2rem;">
+    <div class="table-header">
+        <h3><i class="fas fa-clipboard-check"></i> Audit Log</h3>
+        <input type="text" id="logSearch" class="form-control-filter" placeholder="Filter logs...">
+    </div>
+    <div class="table-container">
+        <table id="logTable">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>User</th>
+                    <th>Action</th>
+                    <th>IP Address</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in audit_logs %}
+                <tr>
+                    <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>{{ log.user.username if log.user else 'N/A' }}</td>
+                    <td>{{ log.action }}</td>
+                    <td>{{ log.ip_address }}</td>
+                    <td>{{ log.details }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" style="text-align: center;">No audit events logged yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

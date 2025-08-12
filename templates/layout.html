@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ csrf_token_value }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <title>{% block title %}Aegis Cloud Scanner{% endblock %}</title>
+</head>
+<body>
+    <div id="page-background"></div>
+
+    <header class="main-header">
+        <a href="{{ url_for('welcome') }}" class="logo">
+            <i class="fas fa-shield-alt"></i>
+            <div class="logo-text">
+                <h1>Aegis Cloud Scanner</h1>
+                <span>Your Shield in the Cloud.</span>
+            </div>
+        </a>
+        
+        {% set hide_auth_buttons = request.endpoint in ['auth', 'verify_2fa_login', 'request_password_reset', 'reset_with_token'] %}
+        <nav class="main-nav">
+            {% if request.endpoint == 'dashboard' %}
+            <div class="header-actions">
+                <select id="credentialProfileSelect" class="form-control-filter" title="Select a credential profile to use for the scan">
+                    <option value="">-- Select Profile to Scan --</option>
+                    {% if credentials %}
+                        {% for cred in credentials %}
+                            <option value="{{ cred.id }}">{{ cred.profile_name }}</option>
+                        {% endfor %}
+                    {% endif %}
+                </select>
+                
+                <div class="progress-toggle-wrapper">
+                    <label class="theme-switch">
+                        <input type="checkbox" id="progressModeToggle">
+                        <span class="slider round"></span>
+                    </label>
+                    <span>Live Progress</span>
+                </div>
+                <style>
+                    .progress-toggle-wrapper { display: flex; align-items: center; gap: 0.5rem; color: var(--dark-grey); background: var(--light-grey); padding: 0.5rem 1rem; border-radius: var(--border-radius); }
+                    body.dark-mode .progress-toggle-wrapper { color: #ECF0F1; }
+                </style>
+                <button id="scanButton" class="button"><i class="fas fa-search"></i> Run Scan</button>
+                <a href="{{ url_for('generate_pdf_report') }}" class="button"><i class="fas fa-file-pdf"></i> Download Report</a>
+            </div>
+            {% endif %}
+
+            {% if current_user.is_authenticated %}
+                <span>Welcome, {{ current_user.username }}</span>
+                <div class="settings-dropdown">
+                    <button class="settings-button"><i class="fas fa-user-cog"></i></button>
+                    <div class="dropdown-content">
+                        {% if current_user.is_admin %}
+                            <a href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a>
+                            <div class="dropdown-divider"></div>
+                        {% endif %}
+                        <a href="{{ url_for('settings') }}">Settings</a>
+                        <div class="dropdown-divider"></div>
+                        <div class="theme-switch-wrapper">
+                            <span>Dark Mode</span>
+                            <label class="theme-switch" for="theme-checkbox">
+                                <input type="checkbox" id="theme-checkbox" />
+                                <div class="slider round"></div>
+                            </label>
+                        </div>
+                        <div class="dropdown-divider"></div>
+                        <a href="{{ url_for('logout') }}">Log Out</a>
+                    </div>
+                </div>
+            {% elif not hide_auth_buttons %}
+                <a href="{{ url_for('auth', _anchor='login') }}" class="nav-button">Login</a>
+                <a href="{{ url_for('auth', _anchor='register') }}" class="nav-button primary">Register</a>
+            {% endif %}
+        </nav>
+    </header>
+
+    <main>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages-container">
+                {% for category, message in messages %}
+                    <p class="flash {{ category }}"><i class="fas fa-info-circle"></i> {{ message }}</p>
+                {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+    
+    {% if request.endpoint == 'dashboard' or request.endpoint == 'admin_dashboard' %}
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    {% endif %}
+    
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+    <script>
+      AOS.init({ duration: 600, once: true });
+    </script>
+</body>
+</html>

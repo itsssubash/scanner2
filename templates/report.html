@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Aegis Cloud Security Report</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1.5cm;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #333;
+            line-height: 1.5;
+        }
+        h1, h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            margin: 0;
+        }
+        .header .subtitle {
+            font-size: 1.1em;
+            color: #555;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        .metric {
+            background-color: #f4f7f6;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .metric-value {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+        .metric-label {
+            font-size: 1.1em;
+            color: #555;
+        }
+        .critical-value { color: #e74c3c; }
+        .ok-value { color: #2ecc71; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+            word-wrap: break-word;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .status-CRITICAL {
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        .status-OK {
+            color: #27ae60;
+        }
+        .remediation-cell {
+            background-color: #fcf8e3;
+            font-size: 0.9em;
+            color: #8a6d3b;
+        }
+        footer {
+            position: fixed;
+            bottom: -40px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 0.8em;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <footer>
+        Aegis Cloud Scanner - Report Generated on {{ scan_date.strftime('%Y-%m-%d %H:%M') }}
+    </footer>
+
+    <div class="header">
+        <h1>Aegis Cloud Security Report</h1>
+        <p class="subtitle">An automated assessment of your AWS security posture.</p>
+    </div>
+
+    {% set critical_count = results | selectattr('status', 'equalto', 'CRITICAL') | list | length %}
+    {% set ok_count = results | selectattr('status', 'equalto', 'OK') | list | length %}
+
+    <h2>Executive Summary</h2>
+    <div class="summary-grid">
+        <div class="metric">
+            <div class="metric-value critical-value">{{ critical_count }}</div>
+            <div class="metric-label">Critical Findings</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value ok-value">{{ ok_count }}</div>
+            <div class="metric-label">Checks Passed</div>
+        </div>
+    </div>
+
+    <h2>Detailed Findings</h2>
+    <table>
+        <thead>
+            <tr>
+                <th style="width:15%">Service</th>
+                <th style="width:25%">Resource</th>
+                <th style="width:10%">Status</th>
+                <th>Issue</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for result in results %}
+            <tr>
+                <td>{{ result.service }}</td>
+                <td>{{ result.resource }}</td>
+                <td class="status-{{ result.status }}">{{ result.status }}</td>
+                <td>{{ result.issue }}</td>
+            </tr>
+            {% if result.remediation %}
+            <tr class="remediation-row">
+                <td colspan="4" class="remediation-cell">
+                    <strong>Remediation:</strong> {{ result.remediation }}
+                </td>
+            </tr>
+            {% endif %}
+            {% else %}
+            <tr>
+                <td colspan="4" style="text-align:center;">No findings to report.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

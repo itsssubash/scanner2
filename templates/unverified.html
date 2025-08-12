@@ -1,0 +1,13 @@
+{% extends "layout.html" %}
+{% block title %}Verify Your Email{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 600px; margin: auto; text-align: center;" data-aos="fade-up">
+    <h2><i class="fas fa-envelope"></i> Please Verify Your Email</h2>
+    <p>Before you can access the dashboard, you need to verify your email address.</p>
+    <p>A verification link has been sent to <strong>{{ current_user.email }}</strong>.</p>
+    <p class="text-muted" style="margin-top: 2rem;">
+        Didn't receive the email?
+        <a href="{{ url_for('resend_verification') }}">Click here to resend</a>.
+    </p>
+</div>
+{% endblock %}
