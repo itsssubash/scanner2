@@ -38,48 +38,26 @@ from itsdangerous import URLSafeTimedSerializer
 
 from parallel_scanner import run_parallel_scans_blocking, run_parallel_scans_progress
 
-# --- Application Setup Check & State Management ---
-# Use APPDATA if it exists (Windows), otherwise use the current directory (Heroku/Linux)
-APP_DATA_DIR = os.path.join(os.getenv('APPDATA', '.'), 'CloudSecurityScanner')
-os.makedirs(APP_DATA_DIR, exist_ok=True)
-CONFIG_FILE_PATH = os.path.join(APP_DATA_DIR, 'config.json')
-SETUP_MODE = not os.path.exists(CONFIG_FILE_PATH)
-
 # --- Flask App Initialization ---
-if getattr(sys, 'frozen', False):
-    template_folder = os.path.join(sys._MEIPASS, 'templates')
-    static_folder = os.path.join(sys._MEIPASS, 'static')
-    app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
-else:
-    app = Flask(__name__, instance_relative_config=True, static_folder='static', template_folder='templates')
+app = Flask(__name__, instance_relative_config=True, static_folder='static', template_folder='templates')
 
-
-# --- Configuration Loading ---
-if not SETUP_MODE:
-    try:
-        with open(CONFIG_FILE_PATH, 'r') as f:
-            app_config = json.load(f)
-        session = boto3.Session(
-            aws_access_key_id=app_config['IAM_ACCESS_KEY'],
-            aws_secret_access_key=app_config['IAM_SECRET_KEY']
-        )
-        client = session.client('secretsmanager')
-        secret_response = client.get_secret_value(SecretId=app_config['SECRET_ARN'])
-        secrets_dict = json.loads(secret_response['SecretString'])
-        app.config.update(secrets_dict)
-        app.config['MAIL_PORT'] = int(app.config['MAIL_PORT'])
-        app.config['MAIL_USE_TLS'] = str(app.config['MAIL_USE_TLS']).lower() in ('true', '1', 't')
-        app.config['MAIL_DEFAULT_SENDER'] = app.config['MAIL_USERNAME']
-    except Exception as e:
-        print(f"FATAL: Config is invalid or secrets could not be fetched. Error: {e}")
-        sys.exit(1)
-else:
-    app.config['SECRET_KEY'] = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
+# --- Configuration Loading from Environment Variables ---
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
+app.config['ENCRYPTION_KEY'] = os.environ.get('ENCRYPTION_KEY')
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'True').lower() in ('true', '1', 't')
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME')
+app.config['ADMIN_REGISTRATION_KEY'] = os.environ.get('ADMIN_REGISTRATION_KEY')
 
 # Use Heroku's Postgres DATABASE_URL if available, otherwise use local SQLite
 if 'DATABASE_URL' in os.environ:
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL').replace("://", "ql://", 1)
 else:
+    APP_DATA_DIR = os.path.join(os.getenv('APPDATA', '.'), 'CloudSecurityScanner')
+    os.makedirs(APP_DATA_DIR, exist_ok=True)
     DB_PATH = os.path.join(APP_DATA_DIR, 'app.db')
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + DB_PATH
 
@@ -111,7 +89,7 @@ limiter = Limiter(get_remote_address, app=app, default_limits=["200 per day", "5
 def inject_csrf_token(): return dict(csrf_token_value=generate_csrf())
 
 fernet = None
-if not SETUP_MODE and app.config.get('ENCRYPTION_KEY'):
+if app.config.get('ENCRYPTION_KEY'):
     fernet = Fernet(app.config['ENCRYPTION_KEY'].encode())
 
 def encrypt_data(data): return fernet.encrypt(data.encode()).decode()
