@@ -39,16 +39,11 @@ from itsdangerous import URLSafeTimedSerializer
 from parallel_scanner import run_parallel_scans_blocking, run_parallel_scans_progress
 
 # --- Application Setup Check & State Management ---
-APP_DATA_DIR = os.path.join(os.getenv('APPDATA'), 'CloudSecurityScanner')
+# Use APPDATA if it exists (Windows), otherwise use the current directory (Heroku/Linux)
+APP_DATA_DIR = os.path.join(os.getenv('APPDATA', '.'), 'CloudSecurityScanner')
 os.makedirs(APP_DATA_DIR, exist_ok=True)
 CONFIG_FILE_PATH = os.path.join(APP_DATA_DIR, 'config.json')
 SETUP_MODE = not os.path.exists(CONFIG_FILE_PATH)
-
-setup_job = {
-    "status": "idle", # Can be 'idle', 'running', 'complete', 'failed'
-    "error": None,
-    "result": None
-}
 
 # --- Flask App Initialization ---
 if getattr(sys, 'frozen', False):
@@ -81,9 +76,14 @@ if not SETUP_MODE:
 else:
     app.config['SECRET_KEY'] = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
 
+# Use Heroku's Postgres DATABASE_URL if available, otherwise use local SQLite
+if 'DATABASE_URL' in os.environ:
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL').replace("://", "ql://", 1)
+else:
+    DB_PATH = os.path.join(APP_DATA_DIR, 'app.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + DB_PATH
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-DB_PATH = os.path.join(APP_DATA_DIR, 'app.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + DB_PATH
 
 # --- Extension Initialization ---
 csrf = CSRFProtect(app)
@@ -94,12 +94,13 @@ csp = {
     'font-src': ['\'self\'', 'https://cdnjs.cloudflare.com', 'https://fonts.gstatic.com'],
     'img-src': ['\'self\'', 'data:']
 }
-Talisman(app, content_security_policy=csp, force_https=False)
+Talisman(app, content_security_policy=csp)
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'auth'
+login_manager.login_message_category = "info"
 mail = Mail(app)
 CORS(app)
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
@@ -108,8 +109,11 @@ limiter = Limiter(get_remote_address, app=app, default_limits=["200 per day", "5
 # --- Global Functions & Context Processors ---
 @app.context_processor
 def inject_csrf_token(): return dict(csrf_token_value=generate_csrf())
+
 fernet = None
-if not SETUP_MODE and app.config.get('ENCRYPTION_KEY'): fernet = Fernet(app.config['ENCRYPTION_KEY'].encode())
+if not SETUP_MODE and app.config.get('ENCRYPTION_KEY'):
+    fernet = Fernet(app.config['ENCRYPTION_KEY'].encode())
+
 def encrypt_data(data): return fernet.encrypt(data.encode()).decode()
 def decrypt_data(encrypted_data): return fernet.decrypt(encrypted_data.encode()).decode()
 
@@ -284,7 +288,6 @@ def scheduled_scan_job():
     print("--- Scheduled Job Check Finished ---")
 
 # --- Routes ---
-
 @app.before_request
 def check_session():
     if current_user.is_authenticated:
