@@ -20,6 +20,7 @@ from datetime import timedelta, timezone
 from functools import wraps
 import click
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from flask_wtf.csrf import CSRFProtect, generate_csrf
 from flask_talisman import Talisman
@@ -38,7 +39,7 @@ from waitress import serve
 from itsdangerous import URLSafeTimedSerializer
 import hashlib
 
-from parallel_scanner import run_parallel_scans_blocking, run_parallel_scans_progress
+from parallel_scanner import get_all_scan_functions
 
 # Load environment variables from .env file if it exists (for local development).
 # Heroku will provide these as config vars.
@@ -529,46 +530,70 @@ def scan():
             "aws_access_key_id": credential.access_key_id,
             "aws_secret_access_key": secret_key
         }
-
-        # The core change is here to support progress_mode
+        
+        scan_functions = get_all_scan_functions(**aws_creds)
+        
         if progress_mode:
             def generate():
-                # Yield initial message
-                yield f"data: {json.dumps({'status': 'progress', 'message': 'Initializing parallel scan engine...'})}\n\n"
+                yield f"data: {json.dumps({'status': 'progress', 'message': 'Starting scan...'})}\n\n"
                 
-                # Run the scan and yield progress updates
-                for update in run_parallel_scans_progress(**aws_creds):
-                    yield f"data: {json.dumps(update)}\n\n"
-                
-                # Block for final results to be complete, filter them, and save to DB
-                final_results = run_parallel_scans_blocking(**aws_creds)
-                final_results = [r for r in final_results if _generate_finding_hash(r) not in suppressed_hashes]
-                
-                scan_time = datetime.datetime.now(datetime.timezone.utc)
-                
-                with app.app_context():
-                    user = db.session.get(User, user_id)
-                    if user:
-                        for result in final_results:
-                            if "error" not in result:
-                                db_result = ScanResult(
-                                    service=result.get('service'),
-                                    resource=result.get('resource'),
-                                    status=result.get('status'),
-                                    issue=result.get('issue'),
-                                    remediation=result.get('remediation'),
-                                    doc_url=result.get('doc_url'),
-                                    timestamp=scan_time,
-                                    author=user
-                                )
-                                db.session.add(db_result)
-                        db.session.commit()
+                # Use a small buffer to save results periodically to reduce memory pressure
+                results_buffer = []
+                with ThreadPoolExecutor(max_workers=15) as executor:
+                    future_to_scan = {executor.submit(scan_func): name for name, scan_func in scan_functions}
+                    
+                    for future in as_completed(future_to_scan):
+                        scan_name = future_to_scan[future]
+                        try:
+                            results = future.result()
+                            for r in results:
+                                # Check for suppression before adding to buffer
+                                if _generate_finding_hash(r) not in suppressed_hashes:
+                                    results_buffer.append(r)
+                            
+                            # Periodically commit to database to free up memory
+                            if len(results_buffer) >= 20: 
+                                with app.app_context():
+                                    scan_time = datetime.datetime.now(datetime.timezone.utc)
+                                    user = db.session.get(User, user_id)
+                                    if user:
+                                        for res in results_buffer:
+                                            db_result = ScanResult(
+                                                service=res.get('service'), resource=res.get('resource'), status=res.get('status'), issue=res.get('issue'), remediation=res.get('remediation'), doc_url=res.get('doc_url'), timestamp=scan_time, author=user)
+                                            db.session.add(db_result)
+                                        db.session.commit()
+                                results_buffer = [] # Clear the buffer
+                                
+                            yield f"data: {json.dumps({'status': 'progress', 'message': f'Completed: {scan_name}'})}\n\n"
 
-                # Yield final completion message and results
-                yield f"data: {json.dumps({'status': 'complete', 'results': final_results})}\n\n"
+                        except Exception as e:
+                            yield f"data: {json.dumps({'status': 'error', 'message': f'Error in {scan_name}: {str(e)}'})}\n\n"
+                            print(f"ERROR in scan '{scan_name}': {e}")
+                            
+                # Commit any remaining items in the buffer
+                if results_buffer:
+                    with app.app_context():
+                        scan_time = datetime.datetime.now(datetime.timezone.utc)
+                        user = db.session.get(User, user_id)
+                        if user:
+                            for res in results_buffer:
+                                db_result = ScanResult(
+                                    service=res.get('service'), resource=res.get('resource'), status=res.get('status'), issue=res.get('issue'), remediation=res.get('remediation'), doc_url=res.get('doc_url'), timestamp=scan_time, author=user)
+                                db.session.add(db_result)
+                            db.session.commit()
+
+                # After all scans are done, fetch all the new results from DB to send to client
+                final_results = ScanResult.query.filter_by(author=current_user).order_by(ScanResult.timestamp.desc()).limit(100).all()
+                final_results_dicts = [{
+                    "service": r.service, "resource": r.resource, "status": r.status, 
+                    "issue": r.issue, "remediation": r.remediation, "doc_url": r.doc_url
+                } for r in final_results]
+                
+                yield f"data: {json.dumps({'status': 'complete', 'results': final_results_dicts})}\n\n"
+            
             return Response(generate(), mimetype='text/event-stream')
         else:
-            # Existing blocking scan logic
+            # Standard blocking scan logic
             scan_results = run_parallel_scans_blocking(**aws_creds)
             scan_results = [r for r in scan_results if _generate_finding_hash(r) not in suppressed_hashes]
             
