@@ -4,6 +4,7 @@ Flask-Migrate
 Flask-Cors
 Flask-Login
 Flask-Bcrypt
+cryptography
 Flask-WTF
 boto3
 pyotp
