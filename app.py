@@ -14,6 +14,7 @@ from flask_bcrypt import Bcrypt
 from flask_mail import Mail, Message
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from dotenv import load_dotenv
 import datetime
 from datetime import timedelta, timezone
 from functools import wraps
@@ -35,23 +36,35 @@ from weasyprint import HTML
 from apscheduler.schedulers.background import BackgroundScheduler
 from waitress import serve
 from itsdangerous import URLSafeTimedSerializer
-import hashlib  # ADDED: Import hashlib
+import hashlib
 
 from parallel_scanner import run_parallel_scans_blocking, run_parallel_scans_progress
 
+# Load environment variables from .env file if it exists (for local development).
+# Heroku will provide these as config vars.
+env_path = Path('.') / '.env'
+if env_path.is_file():
+    load_dotenv(dotenv_path=env_path)
+
 # --- Flask App Initialization ---
-app = Flask(__name__, instance_relative_config=True, static_folder='static', template_folder='templates')
+if getattr(sys, 'frozen', False):
+    template_folder = os.path.join(sys._MEIPASS, 'templates')
+    static_folder = os.path.join(sys._MEIPASS, 'static')
+    app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
+else:
+    app = Flask(__name__, instance_relative_config=True, static_folder='static', template_folder='templates')
 
 # --- Configuration Loading from Environment Variables ---
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
-app.config['ENCRYPTION_KEY'] = os.environ.get('ENCRYPTION_KEY')
-app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER')
-app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
-app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'True').lower() in ('true', '1', 't')
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
-app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME')
-app.config['ADMIN_REGISTRATION_KEY'] = os.environ.get('ADMIN_REGISTRATION_KEY')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
+app.config['ENCRYPTION_KEY'] = os.getenv('ENCRYPTION_KEY')
+app.config['ADMIN_REGISTRATION_KEY'] = os.getenv('ADMIN_REGISTRATION_KEY')
+app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER')
+app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'True').lower() in ('true', '1', 't')
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_USERNAME')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Use Heroku's Postgres DATABASE_URL if available, otherwise use local SQLite
 if 'DATABASE_URL' in os.environ:
@@ -62,7 +75,14 @@ else:
     DB_PATH = os.path.join(APP_DATA_DIR, 'app.db')
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + DB_PATH
 
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# --- Check for Critical Configuration Variables before Continuing ---
+if not app.config.get('SECRET_KEY'):
+    print("FATAL: SECRET_KEY not set. Exiting.")
+    sys.exit(1)
+
+if not app.config.get('ENCRYPTION_KEY'):
+    print("FATAL: ENCRYPTION_KEY not set. Exiting.")
+    sys.exit(1)
 
 # --- Extension Initialization ---
 csrf = CSRFProtect(app)
@@ -73,7 +93,7 @@ csp = {
     'font-src': ['\'self\'', 'https://cdnjs.cloudflare.com', 'https://fonts.gstatic.com'],
     'img-src': ['\'self\'', 'data:']
 }
-Talisman(app, content_security_policy=csp)
+Talisman(app, content_security_policy=csp, force_https=False)
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 bcrypt = Bcrypt(app)
@@ -83,15 +103,12 @@ login_manager.login_message_category = "info"
 mail = Mail(app)
 CORS(app)
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+fernet = Fernet(app.config['ENCRYPTION_KEY'].encode())
 limiter = Limiter(get_remote_address, app=app, default_limits=["200 per day", "50 per hour"])
 
 # --- Global Functions & Context Processors ---
 @app.context_processor
 def inject_csrf_token(): return dict(csrf_token_value=generate_csrf())
-
-fernet = None
-if app.config.get('ENCRYPTION_KEY'):
-    fernet = Fernet(app.config['ENCRYPTION_KEY'].encode())
 
 def encrypt_data(data): return fernet.encrypt(data.encode()).decode()
 def decrypt_data(encrypted_data): return fernet.decrypt(encrypted_data.encode()).decode()
@@ -114,7 +131,20 @@ def check_verified(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- Database Models ---
+@app.before_request
+def before_request():
+    if current_user.is_authenticated:
+        session.permanent = True
+        timeout_minutes = current_user.inactivity_timeout if hasattr(current_user, 'inactivity_timeout') else 15
+        app.permanent_session_lifetime = timedelta(minutes=timeout_minutes)
+        if 'last_activity' in session:
+            last_activity_dt = datetime.datetime.fromisoformat(session['last_activity'])
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            if now_utc - last_activity_dt > app.permanent_session_lifetime:
+                logout_user()
+                flash('Your session has expired due to inactivity. Please log in again.', 'info')
+        session['last_activity'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, index=True)
@@ -177,7 +207,6 @@ class SuppressedFinding(db.Model):
     issue = db.Column(db.String(256))
     user = db.relationship('User')
 
-# --- Helper Functions ---
 def _generate_finding_hash(finding):
     finding_string = f"{finding.get('service', '')}:{finding.get('resource', '')}:{finding.get('issue', '')}"
     return hashlib.sha256(finding_string.encode()).hexdigest()
@@ -478,26 +507,79 @@ def dashboard():
 @login_required
 @check_verified
 def scan():
-    if not current_user.is_2fa_enabled: return jsonify({"error": "2FA setup is required."}), 403
+    if not current_user.is_2fa_enabled:
+        return jsonify({"error": "2FA setup is required."}), 403
     profile_id = request.args.get('profile_id')
-    if not profile_id: return jsonify({"error": "Credential profile ID is required."}), 400
+    progress_mode = request.args.get('progress_mode', 'false').lower() == 'true'
+
+    if not profile_id:
+        return jsonify({"error": "Credential profile ID is required."}), 400
+
     credential = AWSCredential.query.filter_by(id=profile_id, user_id=current_user.id).first()
-    if not credential: return jsonify({"error": "Credential profile not found or access denied."}), 404
+    if not credential:
+        return jsonify({"error": "Credential profile not found or access denied."}), 404
+
     user_id = current_user.id
     suppressed_hashes = {sf.finding_hash for sf in SuppressedFinding.query.filter_by(user_id=user_id).all()}
+
     try:
         secret_key = decrypt_data(credential.encrypted_secret_access_key)
-        aws_creds = {"aws_access_key_id": credential.access_key_id, "aws_secret_access_key": secret_key}
-        scan_results = run_parallel_scans_blocking(**aws_creds)
-        scan_results = [r for r in scan_results if _generate_finding_hash(r) not in suppressed_hashes]
-        scan_time = datetime.datetime.now(datetime.timezone.utc)
-        user = db.session.get(User, user_id)
-        for result in scan_results:
-            if "error" not in result:
-                db_result = ScanResult(service=result.get('service'), resource=result.get('resource'), status=result.get('status'), issue=result.get('issue'), remediation=result.get('remediation'), doc_url=result.get('doc_url'), timestamp=scan_time, author=user)
-                db.session.add(db_result)
-        db.session.commit()
-        return jsonify({"scan_results": scan_results, "cached": False})
+        aws_creds = {
+            "aws_access_key_id": credential.access_key_id,
+            "aws_secret_access_key": secret_key
+        }
+
+        # The core change is here to support progress_mode
+        if progress_mode:
+            def generate():
+                # Yield initial message
+                yield f"data: {json.dumps({'status': 'progress', 'message': 'Initializing parallel scan engine...'})}\n\n"
+                
+                # Run the scan and yield progress updates
+                for update in run_parallel_scans_progress(**aws_creds):
+                    yield f"data: {json.dumps(update)}\n\n"
+                
+                # Block for final results to be complete, filter them, and save to DB
+                final_results = run_parallel_scans_blocking(**aws_creds)
+                final_results = [r for r in final_results if _generate_finding_hash(r) not in suppressed_hashes]
+                
+                scan_time = datetime.datetime.now(datetime.timezone.utc)
+                
+                with app.app_context():
+                    user = db.session.get(User, user_id)
+                    if user:
+                        for result in final_results:
+                            if "error" not in result:
+                                db_result = ScanResult(
+                                    service=result.get('service'),
+                                    resource=result.get('resource'),
+                                    status=result.get('status'),
+                                    issue=result.get('issue'),
+                                    remediation=result.get('remediation'),
+                                    doc_url=result.get('doc_url'),
+                                    timestamp=scan_time,
+                                    author=user
+                                )
+                                db.session.add(db_result)
+                        db.session.commit()
+
+                # Yield final completion message and results
+                yield f"data: {json.dumps({'status': 'complete', 'results': final_results})}\n\n"
+            return Response(generate(), mimetype='text/event-stream')
+        else:
+            # Existing blocking scan logic
+            scan_results = run_parallel_scans_blocking(**aws_creds)
+            scan_results = [r for r in scan_results if _generate_finding_hash(r) not in suppressed_hashes]
+            
+            scan_time = datetime.datetime.now(datetime.timezone.utc)
+            user = db.session.get(User, user_id)
+            for result in scan_results:
+                if "error" not in result:
+                    db_result = ScanResult(service=result.get('service'), resource=result.get('resource'), status=result.get('status'), issue=result.get('issue'), remediation=result.get('remediation'), doc_url=result.get('doc_url'), timestamp=scan_time, author=user)
+                    db.session.add(db_result)
+            db.session.commit()
+            return jsonify({"scan_results": scan_results, "cached": False})
+
     except Exception as e:
         print(f"Major scan error: {e}")
         return jsonify({"error": str(e)}), 500
@@ -857,5 +939,5 @@ if __name__ == '__main__':
     else:
         print("Application is in SETUP MODE. Scheduler is disabled.")
 
-    print(f"Server running on http://127.0.0.1:5000")
+    print(f"Server running on http://127.00.1:5000")
     serve(app, host='0.0.0.0', port=5000)
