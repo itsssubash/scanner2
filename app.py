@@ -182,7 +182,7 @@ class ScanResult(db.Model):
     service = db.Column(db.String(64), index=True)
     resource = db.Column(db.String(128))
     status = db.Column(db.String(64))
-    issue = db.Column(db.String(512)) # UPDATED: Increased column size
+    issue = db.Column(db.String(512)) # FIX: Increased column size to 512
     remediation = db.Column(db.String(512), nullable=True)
     doc_url = db.Column(db.String(256), nullable=True)
     timestamp = db.Column(db.DateTime, index=True, default=lambda: datetime.datetime.now(datetime.timezone.utc))
@@ -948,5 +948,5 @@ if __name__ == '__main__':
     else:
         print("Application is in SETUP MODE. Scheduler is disabled.")
 
-    print(f"Server running on http://127.00.1:5000")
+    print(f"Server running on http://127.0.0.1:5000")
     serve(app, host='0.0.0.0', port=5000)
