@@ -75,6 +75,7 @@ else:
     DB_PATH = os.path.join(APP_DATA_DIR, 'app.db')
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + DB_PATH
 
+
 # --- Check for Critical Configuration Variables before Continuing ---
 if not app.config.get('SECRET_KEY'):
     print("FATAL: SECRET_KEY not set. Exiting.")
@@ -181,7 +182,7 @@ class ScanResult(db.Model):
     service = db.Column(db.String(64), index=True)
     resource = db.Column(db.String(128))
     status = db.Column(db.String(64))
-    issue = db.Column(db.String(256))
+    issue = db.Column(db.String(512)) # UPDATED: Increased column size
     remediation = db.Column(db.String(512), nullable=True)
     doc_url = db.Column(db.String(256), nullable=True)
     timestamp = db.Column(db.DateTime, index=True, default=lambda: datetime.datetime.now(datetime.timezone.utc))
@@ -866,6 +867,14 @@ def promote_user(user_id):
     else:
         flash('User not found.', 'error')
     return redirect(url_for('admin_dashboard'))
+
+def send_reset_email(user):
+    token = s.dumps(user.email, salt='password-reset-salt')
+    msg = Message('Password Reset Request', recipients=[user.email])
+    reset_url = url_for('reset_with_token', token=token, _external=True)
+    msg.html = render_template('reset_email.html', url=reset_url)
+    try: mail.send(msg)
+    except Exception as e: print(f"ERROR: Failed to send password reset email: {e}")
 
 @app.route('/request-password-reset', methods=['GET', 'POST'])
 def request_password_reset():
