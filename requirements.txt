@@ -17,3 +17,4 @@ Flask-Limiter
 Flask-Talisman
 python-dotenv
 gunicorn
+waitress
