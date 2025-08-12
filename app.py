@@ -35,6 +35,7 @@ from weasyprint import HTML
 from apscheduler.schedulers.background import BackgroundScheduler
 from waitress import serve
 from itsdangerous import URLSafeTimedSerializer
+import hashlib  # ADDED: Import hashlib
 
 from parallel_scanner import run_parallel_scans_blocking, run_parallel_scans_progress
 
@@ -846,13 +847,15 @@ def make_admin(username):
         print(f"User '{username}' has been granted admin privileges.")
 
 if __name__ == '__main__':
+    # This block is now more robust and handles the SETUP_MODE flag correctly.
+    SETUP_MODE = os.environ.get('SETUP_MODE', 'False').lower() in ('true', '1', 't')
     if not SETUP_MODE:
         scheduler = BackgroundScheduler(daemon=True)
         scheduler.add_job(func=scheduled_scan_job, trigger='interval', hours=24)
         scheduler.start()
         print("Scheduler started.")
     else:
-        print("Application is in SETUP MODE.")
+        print("Application is in SETUP MODE. Scheduler is disabled.")
 
     print(f"Server running on http://127.0.0.1:5000")
     serve(app, host='0.0.0.0', port=5000)
